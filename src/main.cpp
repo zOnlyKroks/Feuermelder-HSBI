@@ -2,30 +2,27 @@
 #include <WiFi.h>
 #include <Wire.h>
 
-// Configure MQTT buffer size before including PubSubClient
 #define MQTT_MAX_PACKET_SIZE 512
 
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
 
-// ===== WiFi Configuration =====
-const char* WIFI_SSID = "Rades";
-const char* WIFI_PASSWORD = "0368647844490928";
+auto WIFI_SSID = "Rades";
+auto WIFI_PASSWORD = "0368647844490928";
 
-// ===== MQTT Configuration =====
-const char* MQTT_SERVER = "192.168.178.49";
-const int MQTT_PORT = 1883;
-const char* MQTT_CLIENT_ID = "ESP32_Feuermelder";
-const char* MQTT_USER = "";
-const char* MQTT_PASSWORD = "";
+auto MQTT_SERVER = "192.168.178.49";
+constexpr int MQTT_PORT = 1883;
+auto MQTT_CLIENT_ID = "ESP32_Feuermelder";
+auto MQTT_USER = "";
+auto MQTT_PASSWORD = "";
 
 // ===== MQTT Topics =====
-const char* TOPIC_SENSORS = "home/sensors/data";  // Unified topic
-const char* TOPIC_STATUS = "home/sensors/status";
-const char* TOPIC_CONTROL_RATE = "home/sensors/control/rate";
-const char* TOPIC_CONTROL_ENABLE = "home/sensors/control/enable";
-const char* TOPIC_CONTROL_BUZZER = "home/sensors/control/buzzer";
+auto TOPIC_SENSORS = "home/sensors/data";
+auto TOPIC_STATUS = "home/sensors/status";
+auto TOPIC_CONTROL_RATE = "home/sensors/control/rate";
+auto TOPIC_CONTROL_ENABLE = "home/sensors/control/enable";
+auto TOPIC_CONTROL_BUZZER = "home/sensors/control/buzzer";
 
 // ===== Pin Definitions =====
 #define MQ7_PIN 32          // MQ-7 CO sensor analog output
@@ -38,18 +35,14 @@ const char* TOPIC_CONTROL_BUZZER = "home/sensors/control/buzzer";
 #define I2C_SCL 18          // I2C SCL pin for SE95
 #define PIEZO_PIN 25        // Piezo speaker PWM pin
 
-// ===== I2C Sensor Configuration =====
 #define SE95_ADDRESS 0x4F   // SE95 temperature sensor I2C address
 
-// ===== Sensor Configuration =====
 #define DHT_TYPE DHT22
 DHT dht(DHT_PIN, DHT_TYPE);
 
-// ===== Runtime Configuration =====
 unsigned long lastPublish = 0;
-unsigned long publishInterval = 100;  // Dynamic polling rate (100ms default)
+unsigned long publishInterval = 100;
 
-// Sensor enable/disable flags
 struct SensorStates {
     bool mq7 = true;
     bool flame = true;
@@ -58,20 +51,23 @@ struct SensorStates {
     bool se95 = true;
 } sensorsEnabled;
 
-// PM2.5 sensor timing parameters
-const unsigned int PM25_SAMPLING_TIME = 280;
-const unsigned int PM25_DELTA_TIME = 40;
-const unsigned int PM25_SLEEP_TIME = 9680;
+constexpr unsigned int PM25_SAMPLING_TIME = 280;
+constexpr unsigned int PM25_DELTA_TIME = 40;
+constexpr unsigned int PM25_SLEEP_TIME = 9680;
 
-// ===== WiFi and MQTT Clients =====
+static int lastVoRaw = 0;
+static float lastVoVoltage = 0;
+static float lastDustDensity = 0;
+static auto lastAirQuality = "Good";
+static unsigned long lastPM25Read = 0;
+
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-// ===== Function Declarations =====
 void connectWiFi();
 void connectMQTT();
 void publishSensorData();
-void mqttCallback(char* topic, byte* payload, unsigned int length);
+void mqttCallback(const char* topic, const byte* payload, unsigned int length);
 void handleRateControl(const char* payload);
 void handleEnableControl(const char* payload);
 
@@ -82,39 +78,31 @@ void setup() {
     Serial.println("\n=== ESP32 Sensor Monitor ===");
     Serial.println("Initializing...");
 
-    // Initialize I2C for SE95 sensor
     Wire.begin(I2C_SDA, I2C_SCL);
     Serial.println("I2C initialized (SDA=19, SCL=18)");
 
-    // Initialize sensors
     dht.begin();
     Serial.println("DHT22 initialized");
 
-    // Configure analog pins
     pinMode(MQ7_PIN, INPUT);
     pinMode(FLAME_PIN, INPUT);
     pinMode(PM25_VO_PIN, INPUT);
     pinMode(PM25_LED_PIN, OUTPUT);
     pinMode(STATUS_LED, OUTPUT);
 
-    // Initialize PM2.5 LED to OFF (HIGH)
     digitalWrite(PM25_LED_PIN, HIGH);
 
     pinMode(PIEZO_PIN, OUTPUT);
 
-    // Configure ADC for better readings
-    analogReadResolution(12);  // 12-bit resolution (0-4095)
-    analogSetAttenuation(ADC_11db);  // Full 0-3.3V range
+    analogReadResolution(12);
+    analogSetAttenuation(ADC_11db);
 
-    // Configure WiFi with auto-reconnect
-    WiFi.mode(WIFI_STA);
+    WiFiClass::mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
     WiFi.persistent(true);
 
-    // Connect to WiFi
     connectWiFi();
 
-    // Configure MQTT
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
     mqttClient.setSocketTimeout(15);  // 15 second socket timeout
@@ -124,24 +112,20 @@ void setup() {
 }
 
 void loop() {
-    // Check WiFi connection and auto-reconnect
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFiClass::status() != WL_CONNECTED) {
         Serial.println("WiFi connection lost! Reconnecting...");
         connectWiFi();
     }
 
-    // LED status indicator
     static unsigned long lastBlink = 0;
 
     if (!mqttClient.connected()) {
-        // Not connected - fast blink (200ms)
         if (millis() - lastBlink > 200) {
             digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
             lastBlink = millis();
         }
         connectMQTT();
     } else {
-        // Connected - slow blink (1000ms)
         if (millis() - lastBlink > 1000) {
             digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
             lastBlink = millis();
@@ -150,8 +134,7 @@ void loop() {
 
     mqttClient.loop();
 
-    // Publish sensor data at dynamic intervals
-    unsigned long currentTime = millis();
+    const unsigned long currentTime = millis();
     if (currentTime - lastPublish >= publishInterval) {
         publishSensorData();
         lastPublish = currentTime;
@@ -165,13 +148,13 @@ void connectWiFi() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    while (WiFiClass::status() != WL_CONNECTED && attempts < 30) {
         delay(500);
         Serial.print(".");
         attempts++;
     }
 
-    if (WiFi.status() == WL_CONNECTED) {
+    if (WiFiClass::status() == WL_CONNECTED) {
         Serial.println("\nWiFi connected!");
         Serial.print("IP address: ");
         Serial.println(WiFi.localIP());
@@ -184,14 +167,12 @@ void connectWiFi() {
 void connectMQTT() {
     static unsigned long lastAttempt = 0;
 
-    // Try to reconnect only every 5 seconds
     if (millis() - lastAttempt < 5000) {
         return;
     }
     lastAttempt = millis();
 
-    // Check WiFi connection first
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFiClass::status() != WL_CONNECTED) {
         Serial.println("WiFi not connected, skipping MQTT connection attempt");
         return;
     }
@@ -201,10 +182,8 @@ void connectMQTT() {
     Serial.print(":");
     Serial.println(MQTT_PORT);
 
-    // Small delay to ensure network stack is ready
     delay(100);
 
-    // Attempt to connect
     bool connected;
     if (strlen(MQTT_USER) > 0) {
         connected = mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD);
@@ -230,29 +209,28 @@ void connectMQTT() {
 
 void playTone(const int frequency, const int duration) {
     if (frequency > 0) {
-        ledcSetup(0, frequency, 8);  // Channel 0, 8-bit resolution
+        ledcSetup(0, frequency, 8);
         ledcAttachPin(PIEZO_PIN, 0);
-        ledcWrite(0, 128);  // 50% duty cycle
+        ledcWrite(0, 128);
         delay(duration);
-        ledcWrite(0, 0);  // Stop tone
+        ledcWrite(0, 0);
     } else {
-        delay(duration);  // Rest
+        delay(duration);
     }
 }
 
 void playAlarm() {
-    // Simple two-tone alarm
     for (int i = 0; i < 3; i++) {
-        playTone(1000, 200);  // High beep
-        playTone(500, 200);   // Low beep
+        playTone(1000, 200);
+        playTone(500, 200);
     }
 }
 
 void playWarning() {
-    playTone(800, 500);  // Single warning beep
+    playTone(800, 500);
 }
 
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
+void mqttCallback(const char* topic, const byte* payload, const unsigned int length) {
     // Convert payload to string
     char message[length + 1];
     memcpy(message, payload, length);
@@ -274,7 +252,10 @@ void handleRateControl(const char* payload) {
     Serial.print("Received rate control command: ");
     Serial.println(payload);
 
-    unsigned long newRate = atol(payload);
+    char *endptr;
+    const long val = strtol(payload, &endptr, 10);
+
+    const auto newRate = static_cast<unsigned long>(val);
 
     if (newRate >= 100 && newRate <= 60000) {
         publishInterval = newRate;
@@ -290,7 +271,7 @@ void handleRateControl(const char* payload) {
 
 void handleEnableControl(const char* payload) {
     JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
+    const DeserializationError error = deserializeJson(doc, payload);
 
     if (error) {
         Serial.print("JSON parsing failed: ");
@@ -299,7 +280,7 @@ void handleEnableControl(const char* payload) {
     }
 
     const char* sensor = doc["sensor"];
-    bool enabled = doc["enabled"];
+    const bool enabled = doc["enabled"];
 
     if (strcmp(sensor, "mq7") == 0) {
         sensorsEnabled.mq7 = enabled;
@@ -329,12 +310,10 @@ void publishSensorData() {
         return;
     }
 
-    // Read and publish MQ-7 CO sensor
     if (sensorsEnabled.mq7) {
-        int mq7Raw = analogRead(MQ7_PIN);
-        float mq7Voltage = mq7Raw * (3.3 / 4095.0);
+        const int mq7Raw = analogRead(MQ7_PIN);
+        const float mq7Voltage = static_cast<float>(mq7Raw) * (3.3f / 4095.0f);
 
-        // Interpret CO level
         const char* coLevel;
         if (mq7Voltage < 0.3) coLevel = "Good";
         else if (mq7Voltage < 0.6) coLevel = "Moderate";
@@ -355,12 +334,10 @@ void publishSensorData() {
         mqttClient.publish(TOPIC_SENSORS, payload);
     }
 
-    // Read and publish IR flame sensor
     if (sensorsEnabled.flame) {
-        int flameRaw = analogRead(FLAME_PIN);
-        float flameVoltage = flameRaw * (3.3 / 4095.0);
+        const int flameRaw = analogRead(FLAME_PIN);
+        const float flameVoltage = static_cast<float>(flameRaw) * (3.3f / 4095.0f);
 
-        // Interpret flame detection (lower value = more IR detected)
         const char* flameStatus;
         if (flameRaw < 1000) {
             flameStatus = "FIRE DETECTED";
@@ -377,13 +354,11 @@ void publishSensorData() {
         mqttClient.publish(TOPIC_SENSORS, payload);
     }
 
-    // Read and publish DHT22 sensor
     if (sensorsEnabled.dht) {
-        float temperature = dht.readTemperature();
-        float humidity = dht.readHumidity();
+        const float temperature = dht.readTemperature();
+        const float humidity = dht.readHumidity();
 
         if (!isnan(temperature) && !isnan(humidity)) {
-            // Interpret temperature
             const char* tempStatus;
             if (temperature < 15) tempStatus = "Cold";
             else if (temperature < 20) tempStatus = "Cool";
@@ -391,7 +366,6 @@ void publishSensorData() {
             else if (temperature < 30) tempStatus = "Warm";
             else tempStatus = "Hot";
 
-            // Interpret humidity
             const char* humidStatus;
             if (humidity < 30) humidStatus = "Dry";
             else if (humidity < 60) humidStatus = "Comfortable";
@@ -409,19 +383,10 @@ void publishSensorData() {
         }
     }
 
-    // Read and publish PM2.5 sensor
     if (sensorsEnabled.pm25) {
-        // Cache for last reading
-        static int lastVoRaw = 0;
-        static float lastVoVoltage = 0;
-        static float lastDustDensity = 0;
-        static const char* lastAirQuality = "Good";
-        static unsigned long lastPM25Read = 0;
+        const unsigned long now = millis();
 
-        // Only read sensor every 10ms (sensor cycle time)
-        unsigned long now = millis();
         if (now - lastPM25Read >= 10) {
-            // Turn on LED
             digitalWrite(PM25_LED_PIN, LOW);
             delayMicroseconds(PM25_SAMPLING_TIME);
 
@@ -431,13 +396,12 @@ void publishSensorData() {
             digitalWrite(PM25_LED_PIN, HIGH);
             delayMicroseconds(PM25_SLEEP_TIME);
 
-            lastVoVoltage = lastVoRaw * (3.3 / 4095.0);
-            float sensorVoltage = lastVoVoltage * (5.0 / 3.3);
-            lastDustDensity = 0.17 * sensorVoltage - 0.1;
+            lastVoVoltage = static_cast<float>(lastVoRaw) * (3.3f / 4095.0f);
+            const float sensorVoltage = lastVoVoltage * (5.0f / 3.3f);
+            lastDustDensity = 0.17f * sensorVoltage - 0.1f;
             if (lastDustDensity < 0) lastDustDensity = 0;
 
-            // Convert to µg/m³ and interpret air quality (EPA standard)
-            float dustUgM3 = lastDustDensity * 1000;
+            const float dustUgM3 = lastDustDensity * 1000;
             if (dustUgM3 < 12) lastAirQuality = "Good";
             else if (dustUgM3 < 35.4) lastAirQuality = "Moderate";
             else if (dustUgM3 < 55.4) lastAirQuality = "Unhealthy (Sensitive)";
@@ -448,7 +412,6 @@ void publishSensorData() {
             lastPM25Read = now;
         }
 
-        // Always publish last known good reading
         char payload[200];
         snprintf(payload, sizeof(payload),
                  R"({"sensor":"pm25","type":"dust","raw":%d,"voltage":%.2f,"dust":%.2f,"quality":"%s"})",
@@ -457,21 +420,19 @@ void publishSensorData() {
         mqttClient.publish(TOPIC_SENSORS, payload);
     }
 
-    // Read and publish SE95 I2C temperature sensor
     if (sensorsEnabled.se95) {
         Wire.beginTransmission(SE95_ADDRESS);
-        Wire.write(0x00);  // Temperature register
-        byte error = Wire.endTransmission();
+        Wire.write(0x00);
+        const byte error = Wire.endTransmission();
 
         if (error == 0) {
             Wire.requestFrom(SE95_ADDRESS, 2);
 
             if (Wire.available() >= 2) {
-                int a = Wire.read();
-                int b = Wire.read();
-                float temp = a + (static_cast<float>(b) / 256.0);
+                const int a = Wire.read();
+                const int b = Wire.read();
+                const auto temp = static_cast<float>(a + (static_cast<float>(b) / 256.0));
 
-                // Interpret temperature
                 const char* tempStatus;
                 if (temp < 15) tempStatus = "Cold";
                 else if (temp < 20) tempStatus = "Cool";
