@@ -1,1 +1,8 @@
 .pio
+src/config.h
+
+# Web application
+web/node_modules/
+web/data/
+web/certs/
+web/.env

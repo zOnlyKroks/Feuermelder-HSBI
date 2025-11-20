@@ -8,21 +8,8 @@
 #include <DHT.h>
 #include <ArduinoJson.h>
 
-auto WIFI_SSID = "Rades";
-auto WIFI_PASSWORD = "0368647844490928";
-
-auto MQTT_SERVER = "192.168.178.49";
-constexpr int MQTT_PORT = 1883;
-auto MQTT_CLIENT_ID = "ESP32_Feuermelder";
-auto MQTT_USER = "";
-auto MQTT_PASSWORD = "";
-
-// ===== MQTT Topics =====
-auto TOPIC_SENSORS = "home/sensors/data";
-auto TOPIC_STATUS = "home/sensors/status";
-auto TOPIC_CONTROL_RATE = "home/sensors/control/rate";
-auto TOPIC_CONTROL_ENABLE = "home/sensors/control/enable";
-auto TOPIC_CONTROL_BUZZER = "home/sensors/control/buzzer";
+// Include auto-generated configuration
+#include "config.h"
 
 // ===== Pin Definitions =====
 #define MQ7_PIN 32          // MQ-7 CO sensor analog output
@@ -50,6 +37,8 @@ struct SensorStates {
     bool pm25 = true;
     bool se95 = true;
 } sensorsEnabled;
+
+bool statusLedEnabled = true;
 
 constexpr unsigned int PM25_SAMPLING_TIME = 280;
 constexpr unsigned int PM25_DELTA_TIME = 40;
@@ -119,16 +108,22 @@ void loop() {
 
     static unsigned long lastBlink = 0;
 
-    if (!mqttClient.connected()) {
-        if (millis() - lastBlink > 200) {
-            digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
-            lastBlink = millis();
+    if (statusLedEnabled) {
+        if (!mqttClient.connected()) {
+            if (millis() - lastBlink > 200) {
+                digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
+                lastBlink = millis();
+            }
+            connectMQTT();
+        } else {
+            if (millis() - lastBlink > 1000) {
+                digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
+                lastBlink = millis();
+            }
         }
-        connectMQTT();
     } else {
-        if (millis() - lastBlink > 1000) {
-            digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
-            lastBlink = millis();
+        if (!mqttClient.connected()) {
+            connectMQTT();
         }
     }
 
@@ -201,6 +196,8 @@ void connectMQTT() {
         Serial.println("Subscribed to: home/sensors/control/enable");
         mqttClient.subscribe(TOPIC_CONTROL_BUZZER);
         Serial.println("Subscribed to: home/sensors/control/buzzer");
+        mqttClient.subscribe(TOPIC_CONTROL_LED);
+        Serial.println("Subscribed to: home/sensors/control/led");
     } else {
         Serial.print("MQTT connection failed, rc=");
         Serial.println(mqttClient.state());
@@ -245,6 +242,15 @@ void mqttCallback(const char* topic, const byte* payload, const unsigned int len
         if (strcmp(message, "alarm") == 0) playAlarm();
         else if (strcmp(message, "warning") == 0) playWarning();
         else if (strcmp(message, "test") == 0) playTone(1000, 100);
+    } else if (strcmp(topic, TOPIC_CONTROL_LED) == 0) {
+        if (strcmp(message, "on") == 0) {
+            statusLedEnabled = true;
+            Serial.println("Status LED enabled");
+        } else if (strcmp(message, "off") == 0) {
+            statusLedEnabled = false;
+            digitalWrite(STATUS_LED, LOW);
+            Serial.println("Status LED disabled");
+        }
     }
 }
 

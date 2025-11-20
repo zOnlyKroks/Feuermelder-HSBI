@@ -1,205 +1,400 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feuermelder - Sensor Monitor</title>
-    <link rel="stylesheet" href="./style.css">
+    <title>Feuermelder - Fire & Smoke Detector</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
+        <!-- Header -->
         <header>
-            <h1>Feuermelder Sensor Monitor</h1>
-            <div class="status-indicator">
-                <span class="status-label">ESP32 Status:</span>
-                <span id="esp-status" class="status offline">Offline</span>
+            <div class="header-content">
+                <h1>🔥 Feuermelder</h1>
+                <div class="header-controls">
+                    <div class="connection-status" id="connection-status">
+                        <span class="status-dot" id="status-dot"></span>
+                        <span id="status-text">Verbinde...</span>
+                    </div>
+                    <button class="mode-toggle" id="history-toggle" title="Historische Daten anzeigen">
+                        <span class="icon">📊</span>
+                        <span class="label">History</span>
+                    </button>
+                    <button class="mode-toggle" id="mode-toggle" title="Wechsel zu Entwicklermodus">
+                        <span class="icon">⚙️</span>
+                        <span class="label">Dev Mode</span>
+                    </button>
+                </div>
             </div>
         </header>
 
-        <main>
-            <!-- Sensor Data Cards -->
-            <section class="sensor-grid">
+        <!-- User Mode (Default) -->
+        <div class="view-container" id="user-view">
+            <!-- Alert Banner -->
+            <div class="alert-banner hidden" id="alert-banner">
+                <div class="alert-content">
+                    <span class="alert-icon">⚠️</span>
+                    <span class="alert-message" id="alert-message"></span>
+                </div>
+            </div>
+
+            <!-- Main Dashboard -->
+            <div class="dashboard">
+                <!-- Fire Detection Card -->
+                <div class="status-card critical-card">
+                    <div class="card-header">
+                        <span class="card-icon">🔥</span>
+                        <h2>Feuer-Erkennung</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-indicator" id="fire-status">
+                            <div class="status-value">Normal</div>
+                            <div class="status-label">Status</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CO Detection Card -->
+                <div class="status-card critical-card">
+                    <div class="card-header">
+                        <span class="card-icon">☁️</span>
+                        <h2>CO-Sensor</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-indicator" id="co-status">
+                            <div class="status-value">Gut</div>
+                            <div class="status-label">Luftqualität</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Air Quality Card -->
+                <div class="status-card warning-card">
+                    <div class="card-header">
+                        <span class="card-icon">💨</span>
+                        <h2>Luftqualität</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-indicator" id="air-quality-status">
+                            <div class="status-value">Gut</div>
+                            <div class="status-label">PM2.5</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Temperature Card -->
+                <div class="status-card info-card">
+                    <div class="card-header">
+                        <span class="card-icon">🌡️</span>
+                        <h2>Temperatur</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="temp-display">
+                            <div class="temp-main">
+                                <span class="temp-value" id="avg-temp">--</span>
+                                <span class="temp-unit">°C</span>
+                            </div>
+                            <div class="temp-status" id="temp-status">Gemessen</div>
+                            <div class="temp-sub">
+                                <div class="temp-sensor">
+                                    <span class="sensor-label">DHT22:</span>
+                                    <span id="dht22-temp">--°C</span>
+                                </div>
+                                <div class="temp-sensor">
+                                    <span class="sensor-label">SE95:</span>
+                                    <span id="se95-temp">--°C</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Humidity Card -->
+                <div class="status-card info-card">
+                    <div class="card-header">
+                        <span class="card-icon">💧</span>
+                        <h2>Luftfeuchtigkeit</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-indicator" id="humidity-status">
+                            <div class="status-value"><span id="humidity-value">--</span>%</div>
+                            <div class="status-label" id="humidity-label">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Card -->
+                <div class="status-card control-card">
+                    <div class="card-header">
+                        <span class="card-icon">🎛️</span>
+                        <h2>Steuerung</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="control-item">
+                            <label class="control-label">
+                                <span>Status LED</span>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="led-toggle" checked>
+                                    <span class="slider"></span>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="last-update">
+                            Letzte Aktualisierung: <span id="last-update-user">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dev Mode -->
+        <div class="view-container hidden" id="dev-view">
+            <!-- Sensor Grid -->
+            <div class="sensor-grid">
                 <!-- MQ-7 CO Sensor -->
                 <div class="sensor-card">
-                    <div class="card-header">
-                        <h2>MQ-7 CO Sensor</h2>
-                        <label class="toggle">
-                            <input type="checkbox" id="toggle-mq7" checked>
+                    <div class="sensor-header">
+                        <h3>MQ-7 CO Sensor</h3>
+                        <label class="toggle-switch small">
+                            <input type="checkbox" checked data-sensor="mq7">
                             <span class="slider"></span>
                         </label>
                     </div>
                     <div class="sensor-data">
-                        <div class="data-item">
-                            <span class="label">Raw Value:</span>
-                            <span id="mq7-raw" class="value">--</span>
-                        </div>
-                        <div class="data-item">
-                            <span class="label">Voltage:</span>
-                            <span id="mq7-voltage" class="value">--</span>
-                        </div>
-                        <div class="data-item">
+                        <div class="data-row">
                             <span class="label">CO Level:</span>
-                            <span id="mq7-level" class="status-badge">--</span>
+                            <span class="value badge" id="co-level">--</span>
                         </div>
-                        <div class="timestamp" id="mq7-time">Last update: --</div>
-                    </div>
-                </div>
-
-                <!-- IR Flame Sensor -->
-                <div class="sensor-card">
-                    <div class="card-header">
-                        <h2>IR Flame Sensor</h2>
-                        <label class="toggle">
-                            <input type="checkbox" id="toggle-flame" checked>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="sensor-data">
-                        <div class="data-item">
-                            <span class="label">Raw Value:</span>
-                            <span id="flame-raw" class="value">--</span>
+                        <div class="data-row">
+                            <span class="label">Raw:</span>
+                            <span class="value" id="co-raw">--</span>
                         </div>
-                        <div class="data-item">
+                        <div class="data-row">
                             <span class="label">Voltage:</span>
-                            <span id="flame-voltage" class="value">--</span>
+                            <span class="value" id="co-voltage">--</span>
                         </div>
-                        <div class="data-item">
-                            <span class="label">Status:</span>
-                            <span id="flame-status" class="status-badge">--</span>
+                        <div class="data-row">
+                            <span class="label">Timestamp:</span>
+                            <span class="value timestamp" id="co-timestamp">--</span>
                         </div>
-                        <div class="timestamp" id="flame-time">Last update: --</div>
                     </div>
                 </div>
 
-                <!-- Temperature & Humidity -->
+                <!-- Flame Sensor -->
                 <div class="sensor-card">
-                    <div class="card-header">
-                        <h2>DHT22 (AM2302)</h2>
-                        <label class="toggle">
-                            <input type="checkbox" id="toggle-dht" checked>
+                    <div class="sensor-header">
+                        <h3>IR Flame Sensor</h3>
+                        <label class="toggle-switch small">
+                            <input type="checkbox" checked data-sensor="flame">
                             <span class="slider"></span>
                         </label>
                     </div>
                     <div class="sensor-data">
-                        <div class="data-item">
-                            <span class="label">Temperature:</span>
-                            <span id="temperature" class="value large">--</span>
+                        <div class="data-row">
+                            <span class="label">Status:</span>
+                            <span class="value badge" id="flame-status-dev">--</span>
                         </div>
-                        <div class="data-item">
+                        <div class="data-row">
+                            <span class="label">Raw:</span>
+                            <span class="value" id="flame-raw">--</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">Voltage:</span>
+                            <span class="value" id="flame-voltage">--</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="label">Timestamp:</span>
+                            <span class="value timestamp" id="flame-timestamp">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DHT22 -->
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <h3>DHT22 (Temp/Humidity)</h3>
+                        <label class="toggle-switch small">
+                            <input type="checkbox" checked data-sensor="dht">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="sensor-data">
+                        <div class="data-row">
+                            <span class="label">Temperature:</span>
+                            <span class="value" id="dht-temp-dev">--</span>
+                        </div>
+                        <div class="data-row">
                             <span class="label">Temp Status:</span>
-                            <span id="temp-status" class="status-badge">--</span>
+                            <span class="value badge" id="dht-temp-status">--</span>
                         </div>
-                        <div class="data-item">
+                        <div class="data-row">
                             <span class="label">Humidity:</span>
-                            <span id="humidity" class="value large">--</span>
+                            <span class="value" id="dht-humidity">--</span>
                         </div>
-                        <div class="data-item">
+                        <div class="data-row">
                             <span class="label">Humid Status:</span>
-                            <span id="humid-status" class="status-badge">--</span>
+                            <span class="value badge" id="dht-humid-status">--</span>
                         </div>
-                        <div class="timestamp" id="dht-time">Last update: --</div>
+                        <div class="data-row">
+                            <span class="label">Timestamp:</span>
+                            <span class="value timestamp" id="dht-timestamp">--</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- PM2.5 Sensor -->
+                <!-- PM2.5 -->
                 <div class="sensor-card">
-                    <div class="card-header">
-                        <h2>PM2.5 Dust Sensor</h2>
-                        <label class="toggle">
-                            <input type="checkbox" id="toggle-pm25" checked>
+                    <div class="sensor-header">
+                        <h3>PM2.5 Dust Sensor</h3>
+                        <label class="toggle-switch small">
+                            <input type="checkbox" checked data-sensor="pm25">
                             <span class="slider"></span>
                         </label>
                     </div>
                     <div class="sensor-data">
-                        <div class="data-item">
-                            <span class="label">Dust Density:</span>
-                            <span id="pm25-dust" class="value large">--</span>
-                        </div>
-                        <div class="data-item">
+                        <div class="data-row">
                             <span class="label">Air Quality:</span>
-                            <span id="pm25-quality" class="status-badge">--</span>
+                            <span class="value badge" id="pm25-quality">--</span>
                         </div>
-                        <div class="data-item">
-                            <span class="label">Raw Value:</span>
-                            <span id="pm25-raw" class="value">--</span>
+                        <div class="data-row">
+                            <span class="label">Dust Density:</span>
+                            <span class="value" id="pm25-dust">--</span>
                         </div>
-                        <div class="data-item">
+                        <div class="data-row">
+                            <span class="label">Raw:</span>
+                            <span class="value" id="pm25-raw">--</span>
+                        </div>
+                        <div class="data-row">
                             <span class="label">Voltage:</span>
-                            <span id="pm25-voltage" class="value">--</span>
+                            <span class="value" id="pm25-voltage">--</span>
                         </div>
-                        <div class="timestamp" id="pm25-time">Last update: --</div>
+                        <div class="data-row">
+                            <span class="label">Timestamp:</span>
+                            <span class="value timestamp" id="pm25-timestamp">--</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- SE95 I2C Temperature Sensor -->
+                <!-- SE95 -->
                 <div class="sensor-card">
-                    <div class="card-header">
-                        <h2>SE95 Temperature Sensor</h2>
-                        <label class="toggle">
-                            <input type="checkbox" id="toggle-se95" checked>
+                    <div class="sensor-header">
+                        <h3>SE95 I2C Temperature</h3>
+                        <label class="toggle-switch small">
+                            <input type="checkbox" checked data-sensor="se95">
                             <span class="slider"></span>
                         </label>
                     </div>
                     <div class="sensor-data">
-                        <div class="data-item">
+                        <div class="data-row">
                             <span class="label">Temperature:</span>
-                            <span id="se95-temp" class="value large">--</span>
+                            <span class="value" id="se95-temp-dev">--</span>
                         </div>
-                        <div class="data-item">
+                        <div class="data-row">
                             <span class="label">Status:</span>
-                            <span id="se95-status" class="status-badge">--</span>
+                            <span class="value badge" id="se95-status">--</span>
                         </div>
-                        <div class="timestamp" id="se95-time">Last update: --</div>
+                        <div class="data-row">
+                            <span class="label">Timestamp:</span>
+                            <span class="value timestamp" id="se95-timestamp">--</span>
+                        </div>
                     </div>
                 </div>
-            </section>
+            </div>
 
             <!-- Control Panel -->
-            <section class="control-panel">
-                <h2>Control Panel</h2>
-                <div class="control-content">
-                    <div class="control-item">
-                        <label for="polling-rate">Polling Rate (ms):</label>
-                        <div class="input-group">
-                            <input type="number" id="polling-rate" min="100" max="60000" step="100" value="100">
-                            <button id="set-rate-btn" class="btn btn-primary">Set Rate</button>
-                        </div>
-                        <small>Range: 100 - 60000 ms</small>
-                    </div>
+            <div class="control-panel">
+                <h3>Control Panel</h3>
 
-                    <div class="control-item">
-                        <label>🔊 Buzzer Control:</label>
-                        <div class="input-group">
-                            <button onclick="controlBuzzer('test')" class="btn btn-primary">Test Beep</button>
-                            <button onclick="controlBuzzer('warning')" class="btn btn-warning">Warning</button>
-                            <button onclick="controlBuzzer('alarm')" class="btn btn-danger">Alarm</button>
-                        </div>
-                        <small>Control the piezo buzzer remotely</small>
-                    </div>
-
-                    <div id="message" class="message"></div>
-                </div>
-            </section>
-
-            <!-- System Information -->
-            <section class="info-panel">
-                <h2>System Information</h2>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <span class="info-label">Last Update:</span>
-                        <span id="last-update" class="info-value">--</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Current Rate:</span>
-                        <span id="current-rate" class="info-value">5000 ms</span>
+                <div class="control-section">
+                    <label>Polling Rate (ms):</label>
+                    <div class="input-group">
+                        <input type="number" id="polling-rate" value="100" min="100" max="60000" step="100">
+                        <button onclick="updatePollingRate()">Update</button>
                     </div>
                 </div>
-            </section>
-        </main>
 
-        <footer>
-            <p>ESP32 Feuermelder Project | IoT Sensor Monitoring System</p>
-        </footer>
+                <div class="control-section">
+                    <label>Buzzer Control:</label>
+                    <div class="button-group">
+                        <button onclick="triggerBuzzer('test')" class="btn-secondary">Test</button>
+                        <button onclick="triggerBuzzer('warning')" class="btn-warning">Warning</button>
+                        <button onclick="triggerBuzzer('alarm')" class="btn-danger">Alarm</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <label>Status LED:</label>
+                    <div class="button-group">
+                        <button onclick="toggleLED(true)" class="btn-success" id="led-on-btn">ON</button>
+                        <button onclick="toggleLED(false)" class="btn-secondary" id="led-off-btn">OFF</button>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span>Current Polling Rate:</span>
+                        <span id="current-rate">100 ms</span>
+                    </div>
+                    <div class="info-row">
+                        <span>Last Update:</span>
+                        <span id="last-update-dev">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Mode -->
+        <div class="view-container hidden" id="history-view">
+            <div class="history-controls">
+                <h3>📊 Historical Data</h3>
+                <div class="time-range-selector">
+                    <label>Time Range:</label>
+                    <select id="time-range">
+                        <option value="1">Last Hour</option>
+                        <option value="6">Last 6 Hours</option>
+                        <option value="24" selected>Last 24 Hours</option>
+                        <option value="168">Last Week</option>
+                    </select>
+                    <button onclick="loadHistoricalData()" class="btn-primary">Refresh</button>
+                </div>
+            </div>
+
+            <div class="charts-grid">
+                <!-- Temperature Chart -->
+                <div class="chart-card">
+                    <h4>🌡️ Temperature (DHT22 & SE95)</h4>
+                    <canvas id="temp-chart"></canvas>
+                </div>
+
+                <!-- Humidity Chart -->
+                <div class="chart-card">
+                    <h4>💧 Humidity</h4>
+                    <canvas id="humidity-chart"></canvas>
+                </div>
+
+                <!-- CO Level Chart -->
+                <div class="chart-card">
+                    <h4>☁️ CO Level</h4>
+                    <canvas id="co-chart"></canvas>
+                </div>
+
+                <!-- Air Quality Chart -->
+                <div class="chart-card">
+                    <h4>💨 Air Quality (PM2.5)</h4>
+                    <canvas id="air-quality-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Alerts -->
+            <div class="alerts-section">
+                <h3>⚠️ Recent Alerts</h3>
+                <div id="alerts-list" class="alerts-list">
+                    <p class="loading">Loading alerts...</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

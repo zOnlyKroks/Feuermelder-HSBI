@@ -2,9 +2,26 @@ const express = require('express');
 const mqtt = require('mqtt');
 const WebSocket = require('ws');
 const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
+const {
+    saveSensorReading,
+    saveAlert,
+    getHistoricalData,
+    getRecentAlerts,
+    ackAlert,
+    getStatistics,
+    cleanOldData
+} = require('./database');
 
 const app = express();
 const PORT = 3000;
+
+// Database is auto-initialized when module loads
+setInterval(() => {
+    cleanOldData(30); // Keep 30 days of data
+}, 24 * 60 * 60 * 1000);
 
 // MQTT Configuration
 const MQTT_BROKER = process.env.MQTT_BROKER || '192.168.178.49';
@@ -18,7 +35,8 @@ const TOPICS = {
     STATUS: 'home/sensors/status',          // ✓ Status topic
     CONTROL_RATE: 'home/sensors/control/rate',
     CONTROL_ENABLE: 'home/sensors/control/enable',
-    CONTROL_BUZZER: 'home/sensors/control/buzzer'
+    CONTROL_BUZZER: 'home/sensors/control/buzzer',
+    CONTROL_LED: 'home/sensors/control/led'
 };
 
 // Store latest sensor data
@@ -28,6 +46,7 @@ let sensorData = {
     dht22: { temperature: 0, humidity: 0, tempStatus: '', humidStatus: '', timestamp: null },
     pm25: { raw: 0, voltage: 0, dust: 0, quality: '', timestamp: null },
     se95: { temp: 0, status: '', timestamp: null },
+    avgTemperature: { temp: 0, status: '', timestamp: null },
     status: 'offline',
     lastUpdate: null,
     sensorsEnabled: {
@@ -37,7 +56,8 @@ let sensorData = {
         pm25: true,
         se95: true
     },
-    pollingRate: 100
+    pollingRate: 100,
+    statusLedEnabled: true
 };
 
 // Connect to MQTT broker
@@ -94,6 +114,12 @@ mqttClient.on('message', (topic, message) => {
                         level: data.level,
                         timestamp
                     };
+                    // Save to database
+                    saveSensorReading(timestamp, 'co_level', data.voltage, 'V', data.level, data);
+                    // Check for alerts
+                    if (data.level === 'Dangerous' || data.level === 'High') {
+                        saveAlert(timestamp, 'CO', `CO Level: ${data.level}`, data.level === 'Dangerous' ? 'critical' : 'warning');
+                    }
                     break;
 
                 case 'flame':
@@ -103,6 +129,12 @@ mqttClient.on('message', (topic, message) => {
                         status: data.status,
                         timestamp
                     };
+                    // Save to database
+                    saveSensorReading(timestamp, 'flame', data.raw, 'raw', data.status, data);
+                    // Check for alerts
+                    if (data.status === 'FIRE DETECTED') {
+                        saveAlert(timestamp, 'FIRE', 'Fire detected!', 'critical');
+                    }
                     break;
 
                 case 'dht22':
@@ -113,6 +145,9 @@ mqttClient.on('message', (topic, message) => {
                         humidStatus: data.humidStatus,
                         timestamp
                     };
+                    // Save to database
+                    saveSensorReading(timestamp, 'temperature_dht22', data.temp, '°C', data.tempStatus, data);
+                    saveSensorReading(timestamp, 'humidity', data.humidity, '%', data.humidStatus, data);
                     break;
 
                 case 'pm25':
@@ -123,6 +158,12 @@ mqttClient.on('message', (topic, message) => {
                         quality: data.quality,
                         timestamp
                     };
+                    // Save to database
+                    saveSensorReading(timestamp, 'air_quality', data.dust, 'mg/m³', data.quality, data);
+                    // Check for alerts
+                    if (data.quality === 'Very Unhealthy' || data.quality === 'Hazardous') {
+                        saveAlert(timestamp, 'AIR_QUALITY', `Air quality: ${data.quality}`, 'warning');
+                    }
                     break;
 
                 case 'se95':
@@ -131,6 +172,8 @@ mqttClient.on('message', (topic, message) => {
                         status: data.status,
                         timestamp
                     };
+                    // Save to database
+                    saveSensorReading(timestamp, 'temperature_se95', data.temp, '°C', data.status, data);
                     break;
 
                 default:
@@ -139,6 +182,24 @@ mqttClient.on('message', (topic, message) => {
 
             sensorData.lastUpdate = timestamp;
             sensorData.status = 'online';
+
+            // Calculate average temperature from DHT22 and SE95
+            if (sensorData.dht22.temperature && sensorData.se95.temp) {
+                const avgTemp = (sensorData.dht22.temperature + sensorData.se95.temp) / 2;
+                let tempStatus;
+                if (avgTemp < 15) tempStatus = 'Cold';
+                else if (avgTemp < 20) tempStatus = 'Cool';
+                else if (avgTemp < 25) tempStatus = 'Comfortable';
+                else if (avgTemp < 30) tempStatus = 'Warm';
+                else tempStatus = 'Hot';
+
+                sensorData.avgTemperature = {
+                    temp: avgTemp,
+                    status: tempStatus,
+                    timestamp
+                };
+            }
+
             broadcastSensorData();
         } else if (topic === TOPICS.STATUS) {
             sensorData.status = payload;
@@ -209,13 +270,106 @@ app.post('/api/control/buzzer', (req, res) => {
     res.json({ success: true, command });
 });
 
-// Start HTTP server
-const server = app.listen(PORT, () => {
-    console.log('\n=== Feuermelder Web Application ===');
-    console.log(`🌐 Web server: http://localhost:${PORT}`);
-    console.log(`📡 MQTT Broker: ${MQTT_BROKER}:${MQTT_PORT}`);
-    console.log('================================\n');
+app.post('/api/control/led', (req, res) => {
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'Invalid LED state. Use: true or false' });
+    }
+
+    sensorData.statusLedEnabled = enabled;
+    mqttClient.publish(TOPICS.CONTROL_LED, enabled ? 'on' : 'off');
+    console.log(`💡 Status LED ${enabled ? 'enabled' : 'disabled'}`);
+
+    res.json({ success: true, enabled });
 });
+
+// Historical Data API Endpoints
+app.get('/api/history/:sensorType', (req, res) => {
+    const { sensorType } = req.params;
+    const hours = parseInt(req.query.hours) || 24;
+
+    try {
+        const data = getHistoricalData(sensorType, hours);
+        res.json({ sensor: sensorType, hours, data });
+    } catch (err) {
+        console.error('Error fetching historical data:', err);
+        res.status(500).json({ error: 'Failed to fetch historical data' });
+    }
+});
+
+app.get('/api/statistics/:sensorType', (req, res) => {
+    const { sensorType } = req.params;
+    const hours = parseInt(req.query.hours) || 24;
+
+    try {
+        const stats = getStatistics(sensorType, hours);
+        res.json({ sensor: sensorType, hours, statistics: stats });
+    } catch (err) {
+        console.error('Error fetching statistics:', err);
+        res.status(500).json({ error: 'Failed to fetch statistics' });
+    }
+});
+
+app.get('/api/alerts', (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+
+    try {
+        const alerts = getRecentAlerts(limit);
+        res.json({ alerts });
+    } catch (err) {
+        console.error('Error fetching alerts:', err);
+        res.status(500).json({ error: 'Failed to fetch alerts' });
+    }
+});
+
+app.post('/api/alerts/:id/acknowledge', (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const success = ackAlert(parseInt(id));
+        if (success) {
+            res.json({ success: true, id });
+        } else {
+            res.status(404).json({ error: 'Alert not found' });
+        }
+    } catch (err) {
+        console.error('Error acknowledging alert:', err);
+        res.status(500).json({ error: 'Failed to acknowledge alert' });
+    }
+});
+
+// HTTPS Configuration
+const ENABLE_HTTPS = process.env.ENABLE_HTTPS === 'true';
+const CERT_PATH = process.env.CERT_PATH || path.join(__dirname, '../certs/cert.pem');
+const KEY_PATH = process.env.KEY_PATH || path.join(__dirname, '../certs/key.pem');
+
+// Start Server (HTTP or HTTPS)
+let server;
+if (ENABLE_HTTPS && fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH)) {
+    const options = {
+        key: fs.readFileSync(KEY_PATH),
+        cert: fs.readFileSync(CERT_PATH)
+    };
+    server = https.createServer(options, app);
+    server.listen(PORT, () => {
+        console.log('\n=== Feuermelder Web Application ===');
+        console.log(`🔒 HTTPS server: https://localhost:${PORT}`);
+        console.log(`📡 MQTT Broker: ${MQTT_BROKER}:${MQTT_PORT}`);
+        console.log('================================\n');
+    });
+} else {
+    if (ENABLE_HTTPS) {
+        console.warn('⚠️  HTTPS enabled but certificates not found, falling back to HTTP');
+    }
+    server = http.createServer(app);
+    server.listen(PORT, () => {
+        console.log('\n=== Feuermelder Web Application ===');
+        console.log(`🌐 HTTP server: http://localhost:${PORT}`);
+        console.log(`📡 MQTT Broker: ${MQTT_BROKER}:${MQTT_PORT}`);
+        console.log('================================\n');
+    });
+}
 
 // WebSocket server for real-time updates
 const wss = new WebSocket.Server({ server });
@@ -252,11 +406,29 @@ function broadcastSensorData() {
 }
 
 // Handle graceful shutdown
+let isShuttingDown = false;
 process.on('SIGINT', () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
     console.log('\n🛑 Shutting down gracefully...');
-    mqttClient.end();
+
+    mqttClient.end(false, {}, () => {
+        console.log('✓ MQTT disconnected');
+    });
+
+    wss.clients.forEach(client => {
+        client.close();
+    });
+
     server.close(() => {
         console.log('✓ Server closed');
         process.exit(0);
     });
+
+    // Force exit after 3 seconds if graceful shutdown fails
+    setTimeout(() => {
+        console.log('⚠️  Force exit');
+        process.exit(1);
+    }, 3000);
 });
