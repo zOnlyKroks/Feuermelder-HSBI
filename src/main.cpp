@@ -14,13 +14,13 @@
 // ===== Pin Definitions =====
 #define MQ7_PIN 32          // MQ-7 CO sensor analog output
 #define FLAME_PIN 35        // IR flame sensor analog output
-#define DHT_PIN 15          // AM2302 (DHT22) data pin
-#define PM25_VO_PIN 34      // PM2.5 sensor analog output
+#define DHT_PIN 33          // AM2302 (DHT22) data pin
+#define PM25_VO_PIN 22      // PM2.5 sensor analog output
 #define PM25_LED_PIN 23     // PM2.5 sensor LED control
 #define STATUS_LED 2        // Built-in LED for status indication
 #define I2C_SDA 19          // I2C SDA pin for SE95
 #define I2C_SCL 18          // I2C SCL pin for SE95
-#define PIEZO_PIN 25        // Piezo speaker PWM pin
+#define PIEZO_PIN 4        // Piezo speaker PWM pin
 
 #define SE95_ADDRESS 0x4F   // SE95 temperature sensor I2C address
 
