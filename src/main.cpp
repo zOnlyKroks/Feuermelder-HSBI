@@ -13,7 +13,7 @@
 
 // ===== Pin Definitions =====
 #define MQ7_PIN 32          // MQ-7 CO sensor analog output
-#define FLAME_PIN 35        // IR flame sensor analog output
+#define FLAME_PIN 35        // IR flame sensor digital output
 #define DHT_PIN 33          // AM2302 (DHT22) data pin
 #define PM25_VO_PIN 34      // PM2.5 sensor analog output
 #define PM25_LED_PIN 23     // PM2.5 sensor LED control
@@ -28,7 +28,7 @@
 DHT dht(DHT_PIN, DHT_TYPE);
 
 unsigned long lastPublish = 0;
-unsigned long publishInterval = 100;
+unsigned long publishInterval = 1000;
 
 struct SensorStates {
     bool mq7 = true;
@@ -341,21 +341,20 @@ void publishSensorData() {
     }
 
     if (sensorsEnabled.flame) {
-        const int flameRaw = analogRead(FLAME_PIN);
-        const float flameVoltage = static_cast<float>(flameRaw) * (3.3f / 4095.0f);
+        const int flameDetected = digitalRead(FLAME_PIN);
 
         const char* flameStatus;
-        if (flameRaw < 1000) {
+        if (flameDetected == HIGH) {
             flameStatus = "FIRE DETECTED";
             playAlarm();
+        } else {
+            flameStatus = "Normal";
         }
-        else if (flameRaw < 2000) flameStatus = "Heat Source";
-        else flameStatus = "Normal";
 
         char payload[150];
         snprintf(payload, sizeof(payload),
-                 R"({"sensor":"flame","type":"ir","raw":%d,"voltage":%.2f,"status":"%s"})",
-                 flameRaw, flameVoltage, flameStatus);
+                 R"({"sensor":"flame","type":"ir","detected":%s,"status":"%s"})",
+                 flameDetected == LOW ? "true" : "false", flameStatus);
 
         mqttClient.publish(TOPIC_SENSORS, payload);
     }
@@ -404,15 +403,16 @@ void publishSensorData() {
 
             lastVoVoltage = static_cast<float>(lastVoRaw) * (3.3f / 4095.0f);
             const float sensorVoltage = lastVoVoltage * (5.0f / 3.3f);
-            lastDustDensity = 0.17f * sensorVoltage - 0.1f;
+            constexpr float cleanAirVoltage = 2.2f;
+            lastDustDensity = max(0.0f, (sensorVoltage - cleanAirVoltage) * 0.17f);
             if (lastDustDensity < 0) lastDustDensity = 0;
 
             const float dustUgM3 = lastDustDensity * 1000;
-            if (dustUgM3 < 12 * 2) lastAirQuality = "Good";
-            else if (dustUgM3 < 35.4 * 2) lastAirQuality = "Moderate";
-            else if (dustUgM3 < 55.4 * 2) lastAirQuality = "Unhealthy (Sensitive)";
-            else if (dustUgM3 < 150.4 * 2) lastAirQuality = "Unhealthy";
-            else if (dustUgM3 < 250.4 * 2) lastAirQuality = "Very Unhealthy";
+            if (dustUgM3 <= 12.0) lastAirQuality = "Good";
+            else if (dustUgM3 <= 35.4) lastAirQuality = "Moderate";
+            else if (dustUgM3 <= 55.4) lastAirQuality = "Unhealthy (Sensitive)";
+            else if (dustUgM3 <= 150.4) lastAirQuality = "Unhealthy";
+            else if (dustUgM3 <= 250.4) lastAirQuality = "Very Unhealthy";
             else lastAirQuality = "Hazardous";
 
             lastPM25Read = now;
