@@ -123,7 +123,9 @@ $null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action $clean
 
 # Start Mosquitto in background
 Write-Host "Starting Mosquitto MQTT Broker..." -ForegroundColor Yellow
-$mosquittoProcess = Start-Process -FilePath "mosquitto" -ArgumentList "-c", "mqtt/config/mosquitto.conf" -PassThru -NoNewWindow -RedirectStandardOutput "nul" -RedirectStandardError "nul"
+$tempOut = [System.IO.Path]::GetTempFileName()
+$tempErr = [System.IO.Path]::GetTempFileName()
+$mosquittoProcess = Start-Process -FilePath "mosquitto" -ArgumentList "-c", "mqtt/config/mosquitto.conf" -PassThru -NoNewWindow -RedirectStandardOutput $tempOut -RedirectStandardError $tempErr
 
 # Wait for Mosquitto to start
 Start-Sleep -Seconds 3
