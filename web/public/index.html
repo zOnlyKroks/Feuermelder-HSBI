@@ -348,14 +348,30 @@
         <!-- History Mode -->
         <div class="view-container hidden" id="history-view">
             <div class="history-controls">
-                <h3>📊 Historical Data</h3>
+                <h3>📊 Historical Data <span id="data-point-info" style="font-size: 0.8em; color: #a0aec0; font-weight: normal;"></span></h3>
                 <div class="time-range-selector">
                     <label>Time Range:</label>
                     <select id="time-range">
+                        <option value="0.0167">Last 1 Minute</option>
+                        <option value="0.0833">Last 5 Minutes</option>
+                        <option value="0.1667">Last 10 Minutes</option>
+                        <option value="0.25">Last 15 Minutes</option>
+                        <option value="0.5">Last 30 Minutes</option>
+                        <option value="0.75">Last 45 Minutes</option>
                         <option value="1">Last Hour</option>
                         <option value="6">Last 6 Hours</option>
                         <option value="24" selected>Last 24 Hours</option>
                         <option value="168">Last Week</option>
+                    </select>
+                    <label style="margin-left: 20px;">Bucket Size:</label>
+                    <select id="bucket-size">
+                        <option value="auto" selected>Auto</option>
+                        <option value="0">No aggregation (Raw)</option>
+                        <option value="1">1 minute</option>
+                        <option value="5">5 minutes</option>
+                        <option value="15">15 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="60">1 hour</option>
                     </select>
                     <button onclick="loadHistoricalData()" class="btn-primary">Refresh</button>
                 </div>

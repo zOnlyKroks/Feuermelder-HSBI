@@ -68,10 +68,8 @@ void setup() {
     Serial.println("Initializing...");
 
     Wire.begin(I2C_SDA, I2C_SCL);
-    Serial.println("I2C initialized (SDA=19, SCL=18)");
 
     dht.begin();
-    Serial.println("DHT22 initialized");
 
     pinMode(MQ7_PIN, INPUT);
     pinMode(FLAME_PIN, INPUT);
@@ -245,19 +243,14 @@ void mqttCallback(const char* topic, const byte* payload, const unsigned int len
     } else if (strcmp(topic, TOPIC_CONTROL_LED) == 0) {
         if (strcmp(message, "on") == 0) {
             statusLedEnabled = true;
-            Serial.println("Status LED enabled");
         } else if (strcmp(message, "off") == 0) {
             statusLedEnabled = false;
             digitalWrite(STATUS_LED, LOW);
-            Serial.println("Status LED disabled");
         }
     }
 }
 
 void handleRateControl(const char* payload) {
-    Serial.print("Received rate control command: ");
-    Serial.println(payload);
-
     char *endptr;
     const long val = strtol(payload, &endptr, 10);
 
@@ -265,9 +258,6 @@ void handleRateControl(const char* payload) {
 
     if (newRate >= 100 && newRate <= 60000) {
         publishInterval = newRate;
-        Serial.print("✓ Polling rate updated to: ");
-        Serial.print(publishInterval);
-        Serial.println(" ms");
     } else {
         Serial.print("✗ Invalid polling rate: ");
         Serial.print(newRate);
@@ -290,24 +280,14 @@ void handleEnableControl(const char* payload) {
 
     if (strcmp(sensor, "mq7") == 0) {
         sensorsEnabled.mq7 = enabled;
-        Serial.print("MQ-7 sensor ");
-        Serial.println(enabled ? "enabled" : "disabled");
     } else if (strcmp(sensor, "flame") == 0) {
         sensorsEnabled.flame = enabled;
-        Serial.print("Flame sensor ");
-        Serial.println(enabled ? "enabled" : "disabled");
     } else if (strcmp(sensor, "dht") == 0) {
         sensorsEnabled.dht = enabled;
-        Serial.print("DHT22 sensor ");
-        Serial.println(enabled ? "enabled" : "disabled");
     } else if (strcmp(sensor, "pm25") == 0) {
         sensorsEnabled.pm25 = enabled;
-        Serial.print("PM2.5 sensor ");
-        Serial.println(enabled ? "enabled" : "disabled");
     } else if (strcmp(sensor, "se95") == 0) {
         sensorsEnabled.se95 = enabled;
-        Serial.print("SE95 sensor ");
-        Serial.println(enabled ? "enabled" : "disabled");
     }
 }
 

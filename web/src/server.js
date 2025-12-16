@@ -239,7 +239,6 @@ app.post('/api/control/rate', (req, res) => {
 
     sensorData.pollingRate = rate;
     mqttClient.publish(TOPICS.CONTROL_RATE, rate.toString());
-    console.log(`⚡ Polling rate changed to ${rate}ms`);
 
     res.json({ success: true, rate });
 });
@@ -265,7 +264,6 @@ app.post('/api/control/buzzer', (req, res) => {
     }
 
     mqttClient.publish(TOPICS.CONTROL_BUZZER, command);
-    console.log(`🔊 Buzzer command sent: ${command}`);
 
     res.json({ success: true, command });
 });
@@ -279,7 +277,6 @@ app.post('/api/control/led', (req, res) => {
 
     sensorData.statusLedEnabled = enabled;
     mqttClient.publish(TOPICS.CONTROL_LED, enabled ? 'on' : 'off');
-    console.log(`💡 Status LED ${enabled ? 'enabled' : 'disabled'}`);
 
     res.json({ success: true, enabled });
 });
@@ -287,11 +284,12 @@ app.post('/api/control/led', (req, res) => {
 // Historical Data API Endpoints
 app.get('/api/history/:sensorType', (req, res) => {
     const { sensorType } = req.params;
-    const hours = parseInt(req.query.hours) || 24;
+    const hours = parseFloat(req.query.hours) || 24;
+    const bucket = req.query.bucket ? parseInt(req.query.bucket) : null;
 
     try {
-        const data = getHistoricalData(sensorType, hours);
-        res.json({ sensor: sensorType, hours, data });
+        const data = getHistoricalData(sensorType, hours, bucket);
+        res.json({ sensor: sensorType, hours, bucket, data });
     } catch (err) {
         console.error('Error fetching historical data:', err);
         res.status(500).json({ error: 'Failed to fetch historical data' });

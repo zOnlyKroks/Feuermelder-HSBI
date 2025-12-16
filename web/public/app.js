@@ -527,64 +527,97 @@ function initCharts() {
 
 // Load Historical Data
 function loadHistoricalData() {
-    const hours = parseInt(document.getElementById('time-range').value);
+    const hours = parseFloat(document.getElementById('time-range').value);
+    const bucketSize = document.getElementById('bucket-size').value;
+
+    // Build query parameters
+    let queryParams = `hours=${hours}`;
+    if (bucketSize !== 'auto') {
+        queryParams += `&bucket=${bucketSize}`;
+    }
+
+    console.log(`Loading historical data: hours=${hours}, bucket=${bucketSize}, query=${queryParams}`);
+
+    // Determine point visibility based on data density
+    const showPoints = bucketSize === '0' || parseInt(bucketSize) <= 5;
+    const pointRadius = showPoints ? 2 : 0;
+    const tension = bucketSize === '0' ? 0 : 0.4; // No smoothing for raw data
 
     // Fetch temperature data (DHT22)
-    fetch(`/api/history/temperature_dht22?hours=${hours}`)
+    fetch(`/api/history/temperature_dht22?${queryParams}`)
         .then(res => res.json())
         .then(data => {
+            console.log(`Temperature DHT22: ${data.data.length} data points`);
             const labels = data.data.map(d => formatChartTime(d.timestamp));
             const values = data.data.map(d => d.value);
 
             charts.temperature.data.labels = labels;
             charts.temperature.data.datasets[0].data = values;
+            charts.temperature.data.datasets[0].pointRadius = pointRadius;
+            charts.temperature.data.datasets[0].tension = tension;
+
+            // Update data point info
+            const infoEl = document.getElementById('data-point-info');
+            infoEl.textContent = `(${data.data.length} data points)`;
 
             // Also fetch SE95 temperature
-            return fetch(`/api/history/temperature_se95?hours=${hours}`);
+            return fetch(`/api/history/temperature_se95?${queryParams}`);
         })
         .then(res => res.json())
         .then(data => {
+            console.log(`Temperature SE95: ${data.data.length} data points`);
             const values = data.data.map(d => d.value);
             charts.temperature.data.datasets[1].data = values;
+            charts.temperature.data.datasets[1].pointRadius = pointRadius;
+            charts.temperature.data.datasets[1].tension = tension;
             charts.temperature.update();
         })
         .catch(err => console.error('Error loading temperature data:', err));
 
     // Fetch humidity data
-    fetch(`/api/history/humidity?hours=${hours}`)
+    fetch(`/api/history/humidity?${queryParams}`)
         .then(res => res.json())
         .then(data => {
+            console.log(`Humidity: ${data.data.length} data points`);
             const labels = data.data.map(d => formatChartTime(d.timestamp));
             const values = data.data.map(d => d.value);
 
             charts.humidity.data.labels = labels;
             charts.humidity.data.datasets[0].data = values;
+            charts.humidity.data.datasets[0].pointRadius = pointRadius;
+            charts.humidity.data.datasets[0].tension = tension;
             charts.humidity.update();
         })
         .catch(err => console.error('Error loading humidity data:', err));
 
     // Fetch CO data
-    fetch(`/api/history/co_level?hours=${hours}`)
+    fetch(`/api/history/co_level?${queryParams}`)
         .then(res => res.json())
         .then(data => {
+            console.log(`CO Level: ${data.data.length} data points`);
             const labels = data.data.map(d => formatChartTime(d.timestamp));
             const values = data.data.map(d => d.value);
 
             charts.co.data.labels = labels;
             charts.co.data.datasets[0].data = values;
+            charts.co.data.datasets[0].pointRadius = pointRadius;
+            charts.co.data.datasets[0].tension = tension;
             charts.co.update();
         })
         .catch(err => console.error('Error loading CO data:', err));
 
     // Fetch air quality data
-    fetch(`/api/history/air_quality?hours=${hours}`)
+    fetch(`/api/history/air_quality?${queryParams}`)
         .then(res => res.json())
         .then(data => {
+            console.log(`Air Quality: ${data.data.length} data points`);
             const labels = data.data.map(d => formatChartTime(d.timestamp));
             const values = data.data.map(d => d.value);
 
             charts.airQuality.data.labels = labels;
             charts.airQuality.data.datasets[0].data = values;
+            charts.airQuality.data.datasets[0].pointRadius = pointRadius;
+            charts.airQuality.data.datasets[0].tension = tension;
             charts.airQuality.update();
         })
         .catch(err => console.error('Error loading air quality data:', err));
@@ -618,12 +651,13 @@ function loadAlerts() {
         });
 }
 
-// Format time for charts (shorter format)
+// Format time for charts (with seconds for precision)
 function formatChartTime(timestamp) {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('de-DE', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        second: '2-digit'
     });
 }
 

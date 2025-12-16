@@ -79,24 +79,59 @@ function saveAlert(timestamp, alertType, message, severity) {
 }
 
 // Get historical data with aggregation for smooth graphs
-function getHistoricalData(sensorType, hours = 24) {
-    // Determine aggregation interval based on time range
-    let intervalMinutes;
-    if (hours <= 1) {
-        intervalMinutes = 1; // 1 hour: 1 minute buckets (60 points)
-    } else if (hours <= 6) {
-        intervalMinutes = 5; // 6 hours: 5 minute buckets (72 points)
-    } else if (hours <= 24) {
-        intervalMinutes = 15; // 24 hours: 15 minute buckets (96 points)
-    } else {
-        intervalMinutes = 60; // 1 week: 1 hour buckets (168 points)
+function getHistoricalData(sensorType, hours = 24, intervalMinutes = null) {
+    // Special case: 0 means no aggregation (raw data)
+    if (intervalMinutes === 0) {
+        const query = db.prepare(`
+            SELECT
+                timestamp,
+                value,
+                status
+            FROM sensor_readings
+            WHERE sensor_type = ?
+            AND datetime(timestamp) >= datetime('now', '-' || ? || ' hours')
+            ORDER BY timestamp ASC
+        `);
+        return query.all(sensorType, hours);
     }
 
-    // Aggregate data by time intervals
+    if (intervalMinutes === null || intervalMinutes === undefined) {
+        if (hours <= 0.0833) { // <= 5 minutes
+            intervalMinutes = 0; // No aggregation (raw data)
+        } else if (hours <= 0.25) { // <= 15 minutes
+            intervalMinutes = 0; // No aggregation (raw data)
+        } else if (hours <= 0.5) { // <= 30 minutes
+            intervalMinutes = 1; // 1 minute buckets
+        } else if (hours <= 1) { // <= 1 hour
+            intervalMinutes = 1; // 1 minute buckets (60 points)
+        } else if (hours <= 6) {
+            intervalMinutes = 5; // 6 hours: 5 minute buckets (72 points)
+        } else if (hours <= 24) {
+            intervalMinutes = 15; // 24 hours: 15 minute buckets (96 points)
+        } else {
+            intervalMinutes = 60; // 1 week: 1 hour buckets (168 points)
+        }
+    }
+
+    if (intervalMinutes === 0) {
+        const query = db.prepare(`
+            SELECT
+                timestamp,
+                value,
+                status
+            FROM sensor_readings
+            WHERE sensor_type = ?
+            AND datetime(timestamp) >= datetime('now', '-' || ? || ' hours')
+            ORDER BY timestamp ASC
+        `);
+        return query.all(sensorType, hours);
+    }
+
+    const intervalSeconds = intervalMinutes * 60;
     const query = db.prepare(`
         SELECT
             datetime(
-                strftime('%s', timestamp) / (? * 60) * (? * 60),
+                (CAST(strftime('%s', timestamp) AS INTEGER) / ?) * ?,
                 'unixepoch'
             ) as timestamp,
             AVG(value) as value,
@@ -104,11 +139,11 @@ function getHistoricalData(sensorType, hours = 24) {
         FROM sensor_readings
         WHERE sensor_type = ?
         AND datetime(timestamp) >= datetime('now', '-' || ? || ' hours')
-        GROUP BY strftime('%s', timestamp) / (? * 60)
+        GROUP BY CAST(strftime('%s', timestamp) AS INTEGER) / ?
         ORDER BY timestamp ASC
     `);
 
-    return query.all(intervalMinutes, intervalMinutes, sensorType, hours, intervalMinutes);
+    return query.all(intervalSeconds, intervalSeconds, sensorType, hours, intervalSeconds);
 }
 
 // Get recent alerts
@@ -157,18 +192,16 @@ function getStatistics(sensorType, hours = 24) {
 // Clean old data (keep last 30 days)
 function cleanOldData(days = 30) {
     try {
-        const result = db.prepare(`
+        db.prepare(`
             DELETE FROM sensor_readings
             WHERE datetime(timestamp) < datetime('now', '-' || ? || ' days')
         `).run(days);
 
-        const alertResult = db.prepare(`
+        db.prepare(`
             DELETE FROM alerts
             WHERE datetime(timestamp) < datetime('now', '-' || ? || ' days')
             AND acknowledged = 1
         `).run(days);
-
-        console.log(`✓ Cleaned ${result.changes} old readings and ${alertResult.changes} old alerts`);
     } catch (err) {
         console.error('Error cleaning old data:', err);
     }
@@ -176,7 +209,6 @@ function cleanOldData(days = 30) {
 
 // Export functions
 module.exports = {
-    initDatabase,
     saveSensorReading,
     saveAlert,
     getHistoricalData,
