@@ -388,11 +388,11 @@ void publishSensorData() {
             if (lastDustDensity < 0) lastDustDensity = 0;
 
             const float dustUgM3 = lastDustDensity * 1000;
-            if (dustUgM3 <= 12.0) lastAirQuality = "Good";
-            else if (dustUgM3 <= 35.4) lastAirQuality = "Moderate";
-            else if (dustUgM3 <= 55.4) lastAirQuality = "Unhealthy (Sensitive)";
-            else if (dustUgM3 <= 150.4) lastAirQuality = "Unhealthy";
-            else if (dustUgM3 <= 250.4) lastAirQuality = "Very Unhealthy";
+            if (dustUgM3 <= 12.0 * 2) lastAirQuality = "Good";
+            else if (dustUgM3 <= 35.4 * 2) lastAirQuality = "Moderate";
+            else if (dustUgM3 <= 55.4 * 2) lastAirQuality = "Unhealthy (Sensitive)";
+            else if (dustUgM3 <= 150.4 * 2) lastAirQuality = "Unhealthy";
+            else if (dustUgM3 <= 250.4 * 2) lastAirQuality = "Very Unhealthy";
             else lastAirQuality = "Hazardous";
 
             lastPM25Read = now;
