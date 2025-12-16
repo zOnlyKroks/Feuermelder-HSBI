@@ -44,10 +44,10 @@ function updateConnectionStatus(isConnected) {
 
     if (isConnected) {
         statusDot.className = 'status-dot online';
-        statusText.textContent = 'Verbunden';
+        statusText.textContent = 'Connected';
     } else {
         statusDot.className = 'status-dot offline';
-        statusText.textContent = 'Getrennt';
+        statusText.textContent = 'Disconnected';
     }
 }
 
@@ -148,21 +148,21 @@ function checkAlerts(data) {
 
     // Check Fire
     if (data.flame && data.flame.status === 'FIRE DETECTED') {
-        alerts.push('🔥 FEUER ERKANNT! Sofort evakuieren!');
+        alerts.push('🔥 FIRE DETECTED! Evacuate immediately!');
     }
 
     // Check CO Level
     if (data.mq7) {
         if (data.mq7.level === 'Dangerous') {
-            alerts.push('☠️ GEFÄHRLICHER CO-LEVEL! Raum verlassen!');
+            alerts.push('☠️ DANGEROUS CO LEVEL! Leave the area!');
         } else if (data.mq7.level === 'High') {
-            alerts.push('⚠️ Hoher CO-Level erkannt!');
+            alerts.push('⚠️ High CO level detected!');
         }
     }
 
     // Check Air Quality
     if (data.pm25 && (data.pm25.quality === 'Very Unhealthy' || data.pm25.quality === 'Hazardous')) {
-        alerts.push('🌫️ Sehr schlechte Luftqualität!');
+        alerts.push('🌫️ Very poor air quality!');
     }
 
     // Update alert banner
@@ -342,10 +342,11 @@ function getBadgeClass(status) {
 
 function formatTime(timestamp) {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('de-DE', {
+    return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
     });
 }
 
@@ -654,10 +655,11 @@ function loadAlerts() {
 // Format time for charts (with seconds for precision)
 function formatChartTime(timestamp) {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('de-DE', {
+    return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
     });
 }
 

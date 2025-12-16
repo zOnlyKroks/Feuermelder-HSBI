@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feuermelder - Fire & Smoke Detector</title>
+    <title>Fire & Smoke Detector System</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -12,17 +12,17 @@
         <!-- Header -->
         <header>
             <div class="header-content">
-                <h1>🔥 Feuermelder</h1>
+                <h1>🔥 Fire Detector</h1>
                 <div class="header-controls">
                     <div class="connection-status" id="connection-status">
                         <span class="status-dot" id="status-dot"></span>
-                        <span id="status-text">Verbinde...</span>
+                        <span id="status-text">Connecting...</span>
                     </div>
-                    <button class="mode-toggle" id="history-toggle" title="Historische Daten anzeigen">
+                    <button class="mode-toggle" id="history-toggle" title="Show historical data">
                         <span class="icon">📊</span>
                         <span class="label">History</span>
                     </button>
-                    <button class="mode-toggle" id="mode-toggle" title="Wechsel zu Entwicklermodus">
+                    <button class="mode-toggle" id="mode-toggle" title="Switch to developer mode">
                         <span class="icon">⚙️</span>
                         <span class="label">Dev Mode</span>
                     </button>
@@ -46,7 +46,7 @@
                 <div class="status-card critical-card">
                     <div class="card-header">
                         <span class="card-icon">🔥</span>
-                        <h2>Feuer-Erkennung</h2>
+                        <h2>Fire Detection</h2>
                     </div>
                     <div class="card-body">
                         <div class="status-indicator" id="fire-status">
@@ -60,12 +60,12 @@
                 <div class="status-card critical-card">
                     <div class="card-header">
                         <span class="card-icon">☁️</span>
-                        <h2>CO-Sensor</h2>
+                        <h2>CO Sensor</h2>
                     </div>
                     <div class="card-body">
                         <div class="status-indicator" id="co-status">
-                            <div class="status-value">Gut</div>
-                            <div class="status-label">Luftqualität</div>
+                            <div class="status-value">Good</div>
+                            <div class="status-label">Air Quality</div>
                         </div>
                     </div>
                 </div>
@@ -74,11 +74,11 @@
                 <div class="status-card warning-card">
                     <div class="card-header">
                         <span class="card-icon">💨</span>
-                        <h2>Luftqualität</h2>
+                        <h2>Air Quality</h2>
                     </div>
                     <div class="card-body">
                         <div class="status-indicator" id="air-quality-status">
-                            <div class="status-value">Gut</div>
+                            <div class="status-value">Good</div>
                             <div class="status-label">PM2.5</div>
                         </div>
                     </div>
@@ -88,7 +88,7 @@
                 <div class="status-card info-card">
                     <div class="card-header">
                         <span class="card-icon">🌡️</span>
-                        <h2>Temperatur</h2>
+                        <h2>Temperature</h2>
                     </div>
                     <div class="card-body">
                         <div class="temp-display">
@@ -96,7 +96,7 @@
                                 <span class="temp-value" id="avg-temp">--</span>
                                 <span class="temp-unit">°C</span>
                             </div>
-                            <div class="temp-status" id="temp-status">Gemessen</div>
+                            <div class="temp-status" id="temp-status">Measured</div>
                             <div class="temp-sub">
                                 <div class="temp-sensor">
                                     <span class="sensor-label">DHT22:</span>
@@ -115,7 +115,7 @@
                 <div class="status-card info-card">
                     <div class="card-header">
                         <span class="card-icon">💧</span>
-                        <h2>Luftfeuchtigkeit</h2>
+                        <h2>Humidity</h2>
                     </div>
                     <div class="card-body">
                         <div class="status-indicator" id="humidity-status">
@@ -129,7 +129,7 @@
                 <div class="status-card control-card">
                     <div class="card-header">
                         <span class="card-icon">🎛️</span>
-                        <h2>Steuerung</h2>
+                        <h2>Controls</h2>
                     </div>
                     <div class="card-body">
                         <div class="control-item">
@@ -142,7 +142,7 @@
                             </label>
                         </div>
                         <div class="last-update">
-                            Letzte Aktualisierung: <span id="last-update-user">--</span>
+                            Last Update: <span id="last-update-user">--</span>
                         </div>
                     </div>
                 </div>
