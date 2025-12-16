@@ -18,28 +18,24 @@ const {
 const app = express();
 const PORT = 3000;
 
-// Database is auto-initialized when module loads
 setInterval(() => {
-    cleanOldData(30); // Keep 30 days of data
+    cleanOldData(30);
 }, 24 * 60 * 60 * 1000);
 
-// MQTT Configuration
 const MQTT_BROKER = process.env.MQTT_BROKER || '192.168.178.49';
 const MQTT_PORT = process.env.MQTT_PORT || 1883;
 const MQTT_USER = process.env.MQTT_USER || '';
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD || '';
 
-// MQTT Topics - Updated to match ESP32 firmware
 const TOPICS = {
-    SENSORS: 'home/sensors/data',           // ✓ Unified topic for all sensors
-    STATUS: 'home/sensors/status',          // ✓ Status topic
+    SENSORS: 'home/sensors/data',
+    STATUS: 'home/sensors/status',
     CONTROL_RATE: 'home/sensors/control/rate',
     CONTROL_ENABLE: 'home/sensors/control/enable',
     CONTROL_BUZZER: 'home/sensors/control/buzzer',
     CONTROL_LED: 'home/sensors/control/led'
 };
 
-// Store latest sensor data
 let sensorData = {
     mq7: { raw: 0, voltage: 0, level: '', timestamp: null },
     flame: { raw: 0, voltage: 0, status: '', timestamp: null },
@@ -56,18 +52,16 @@ let sensorData = {
         pm25: true,
         se95: true
     },
-    pollingRate: 100,
+    pollingRate: 1000,
     statusLedEnabled: true
 };
 
-// Connect to MQTT broker
 const mqttOptions = {
     clientId: 'feuermelder-webapp-' + Math.random().toString(16).substr(2, 8),
     clean: true,
     reconnectPeriod: 1000
 };
 
-// Only add credentials if they're provided
 if (MQTT_USER && MQTT_USER.length > 0) {
     mqttOptions.username = MQTT_USER;
     mqttOptions.password = MQTT_PASSWORD;
@@ -78,7 +72,6 @@ const mqttClient = mqtt.connect(`mqtt://${MQTT_BROKER}:${MQTT_PORT}`, mqttOption
 mqttClient.on('connect', () => {
     console.log('✓ Connected to MQTT broker');
 
-    // Subscribe to unified sensor data topic and status
     mqttClient.subscribe(TOPICS.SENSORS, { qos: 0 }, (err) => {
         if (err) {
             console.error('✗ Failed to subscribe to sensors topic:', err);
@@ -102,10 +95,8 @@ mqttClient.on('message', (topic, message) => {
 
     try {
         if (topic === TOPICS.SENSORS) {
-            // Parse unified sensor data
             const data = JSON.parse(payload);
 
-            // Route data based on sensor type
             switch(data.sensor) {
                 case 'mq7':
                     sensorData.mq7 = {
@@ -114,9 +105,9 @@ mqttClient.on('message', (topic, message) => {
                         level: data.level,
                         timestamp
                     };
-                    // Save to database
+
                     saveSensorReading(timestamp, 'co_level', data.voltage, 'V', data.level, data);
-                    // Check for alerts
+
                     if (data.level === 'Dangerous' || data.level === 'High') {
                         saveAlert(timestamp, 'CO', `CO Level: ${data.level}`, data.level === 'Dangerous' ? 'critical' : 'warning');
                     }
@@ -129,9 +120,9 @@ mqttClient.on('message', (topic, message) => {
                         status: data.status,
                         timestamp
                     };
-                    // Save to database
+
                     saveSensorReading(timestamp, 'flame', data.raw, 'raw', data.status, data);
-                    // Check for alerts
+
                     if (data.status === 'FIRE DETECTED') {
                         saveAlert(timestamp, 'FIRE', 'Fire detected!', 'critical');
                     }
@@ -145,7 +136,7 @@ mqttClient.on('message', (topic, message) => {
                         humidStatus: data.humidStatus,
                         timestamp
                     };
-                    // Save to database
+
                     saveSensorReading(timestamp, 'temperature_dht22', data.temp, '°C', data.tempStatus, data);
                     saveSensorReading(timestamp, 'humidity', data.humidity, '%', data.humidStatus, data);
                     break;
@@ -158,9 +149,9 @@ mqttClient.on('message', (topic, message) => {
                         quality: data.quality,
                         timestamp
                     };
-                    // Save to database
+
                     saveSensorReading(timestamp, 'air_quality', data.dust, 'mg/m³', data.quality, data);
-                    // Check for alerts
+
                     if (data.quality === 'Very Unhealthy' || data.quality === 'Hazardous') {
                         saveAlert(timestamp, 'AIR_QUALITY', `Air quality: ${data.quality}`, 'warning');
                     }
@@ -172,7 +163,7 @@ mqttClient.on('message', (topic, message) => {
                         status: data.status,
                         timestamp
                     };
-                    // Save to database
+
                     saveSensorReading(timestamp, 'temperature_se95', data.temp, '°C', data.status, data);
                     break;
 
@@ -183,7 +174,6 @@ mqttClient.on('message', (topic, message) => {
             sensorData.lastUpdate = timestamp;
             sensorData.status = 'online';
 
-            // Calculate average temperature from DHT22 and SE95
             if (sensorData.dht22.temperature && sensorData.se95.temp) {
                 const avgTemp = (sensorData.dht22.temperature + sensorData.se95.temp) / 2;
                 let tempStatus;
@@ -221,11 +211,9 @@ mqttClient.on('reconnect', () => {
     console.log('🔄 Reconnecting to MQTT broker...');
 });
 
-// Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// REST API Endpoints
 app.get('/api/sensors', (req, res) => {
     res.json(sensorData);
 });
